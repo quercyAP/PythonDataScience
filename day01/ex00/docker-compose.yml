@@ -1,0 +1,43 @@
+services:
+  app:
+    container_name: app
+    image: python:latest
+    env_file: .env
+    working_dir: /app
+    depends_on:
+      - db
+    volumes:
+      - app:/app
+    command: bash -c "pip install -r requirements.txt && python customers_table.py"
+    restart: no
+
+  db:
+    container_name: db
+    image: postgres:latest
+    env_file: .env
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  adminer:
+    container_name: adminer
+    image: adminer:latest
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+
+volumes:
+  db:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/glamazer/goinfre/db.volume
+      o: bind
+  app:
+    driver: local
+    driver_opts:
+      type: none
+      device: volumes/app.volume
+      o: bind

@@ -1,0 +1,23 @@
+services:
+  db:
+    container_name: db
+    image: postgres:latest
+    env_file: .env
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  adminer:
+    container_name: adminer
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+volumes:
+  db:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/glamazer/goinfre/db.volume
+      o: bind

@@ -7,6 +7,7 @@ def fusion():
     """
     Fusionne les tables 'customers' et 'items' en conservant toutes les informations.
     La fusion se fait sur la colonne 'product_id' qui est commune aux deux tables.
+    Déduplique d'abord la table items pour éviter la multiplication des lignes.
     """
     # Charger les variables d'environnement
     load_dotenv()
@@ -35,10 +36,30 @@ def fusion():
             count_items = connection.execute(text("SELECT COUNT(*) FROM items")).scalar()
             print(f"\nNombre de lignes dans customers: {count_customers:,}")
             print(f"Nombre de lignes dans items: {count_items:,}")
+            
+            # 1. Créer une table temporaire items_unique avec seulement une entrée par product_id
+            print("Déduplications des items par product_id...")
+            deduplicate_items_query = """
+            CREATE TABLE items_unique AS
+            SELECT DISTINCT ON (product_id) 
+                product_id,
+                category_id,
+                category_code,
+                brand
+            FROM items
+            """
+            connection.execute(text("DROP TABLE IF EXISTS items_unique"))
+            connection.execute(text(deduplicate_items_query))
+            connection.commit()
+            
+            # Compter le nombre d'items uniques
+            count_items_unique = connection.execute(text("SELECT COUNT(*) FROM items_unique")).scalar()
+            print(f"Nombre d'items après déduplication: {count_items_unique:,} (réduction de {count_items - count_items_unique:,} lignes)")
 
-            # Créer la table 'customers_enriched' qui contiendra la fusion
+            # 2. Créer la table 'customers_enriched' qui contiendra la fusion
             # Utiliser une jointure LEFT pour garder tous les enregistrements de 'customers'
-            # même s'il n'y a pas de correspondance dans 'items'
+            # même s'il n'y a pas de correspondance dans 'items_unique'
+            print("Fusion des tables en cours...")
             fusion_query = """
             CREATE TABLE customers_enriched AS
             SELECT 
@@ -54,14 +75,13 @@ def fusion():
             FROM 
                 customers c
             LEFT JOIN 
-                items i ON c.product_id = i.product_id
+                items_unique i ON c.product_id = i.product_id
             """
             
             # Supprimer la table fusion si elle existe déjà
             connection.execute(text("DROP TABLE IF EXISTS customers_enriched"))
             
             # Exécuter la fusion
-            print("Fusion des tables en cours...")
             connection.execute(text(fusion_query))
             connection.commit()
             
@@ -81,6 +101,10 @@ def fusion():
             """)).scalar()
             match_percent = (match_count / count_fusion) * 100 if count_fusion > 0 else 0
             print(f"Pourcentage d'enregistrements avec correspondance dans items: {match_percent:.2f}%")
+            
+            # Nettoyage - supprimer la table temporaire
+            connection.execute(text("DROP TABLE IF EXISTS items_unique"))
+            connection.commit()
             
             # Renommer la table customers_enriched en customers
             print("Remplacement de la table customers par la table enrichie...")
